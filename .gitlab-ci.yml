@@ -1,0 +1,9 @@
+stages:
+  - build
+
+build-user-service:
+  stage: build
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - cd user-service
+    - mvn clean package
