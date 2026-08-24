@@ -1,14 +1,14 @@
 stages:
-  - test
+  - build
 
-runner-test:
-  stage: test
+build-user-service:
+  stage: build
   tags:
     - docker
-  image: alpine:latest
+  image: maven:3.9.9-eclipse-temurin-17
+
   script:
-    - echo "================================="
-    - echo "GitLab Runner is working!"
-    - echo "Docker executor is working!"
-    - echo "================================="
-    - cat /etc/os-release
+    - java -version
+    - mvn -version
+    - cd user-service
+    - mvn clean package
