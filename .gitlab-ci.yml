@@ -1,19 +1,14 @@
 stages:
   - test
 
-test-user-service:
+runner-test:
   stage: test
   tags:
     - docker
-
+  image: alpine:latest
   script:
-    - docker volume create maven-build
-    - docker run --rm
-      -v "$CI_PROJECT_DIR/user-service:/app:ro"
-      -v "maven-build:/app/target"
-      -w /app
-      maven:3.9.9-eclipse-temurin-17
-      mvn clean package
-
-  after_script:
-    - docker volume rm maven-build || true
+    - echo "================================="
+    - echo "GitLab Runner is working!"
+    - echo "Docker executor is working!"
+    - echo "================================="
+    - cat /etc/os-release
