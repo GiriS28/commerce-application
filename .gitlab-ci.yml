@@ -1,13 +1,14 @@
 stages:
-  - build
+  - test
 
-build-user-service:
-  stage: build
+test-user-service:
+  stage: test
   tags:
     - docker
+
   script:
-    - docker run --rm
-      -v "$CI_PROJECT_DIR/user-service:/app"
-      -w /app
-      maven:3.9.9-eclipse-temurin-17
-      mvn clean package
+    - docker run -d --name ci-postgres -e POSTGRES_DB=commerce_db -e POSTGRES_USER=commerce_user -e POSTGRES_PASSWORD=commerce_password -p 5432:5432 postgres:17
+    - sleep 10
+    - docker exec ci-postgres pg_isready -U commerce_user -d commerce_db
+    - docker stop ci-postgres
+    - docker rm ci-postgres
