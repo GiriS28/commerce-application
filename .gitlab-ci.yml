@@ -1,8 +1,12 @@
 stages:
-  - build
+  - test
+  - docker-test
 
+# -----------------------------------
+# 1. Build and test User Service
+# -----------------------------------
 build-user-service:
-  stage: build
+  stage: test
 
   tags:
     - docker
@@ -27,3 +31,19 @@ build-user-service:
     - mvn -version
     - cd user-service
     - mvn clean package
+
+
+# -----------------------------------
+# 2. Test Docker access
+# -----------------------------------
+docker-test:
+  stage: docker-test
+
+  tags:
+    - docker
+
+  image: docker:27
+
+  script:
+    - docker version
+    - docker info
