@@ -3,9 +3,24 @@ stages:
 
 build-user-service:
   stage: build
+
   tags:
     - docker
+
   image: maven:3.9.9-eclipse-temurin-17
+
+  services:
+    - name: postgres:17
+      alias: postgres
+
+  variables:
+    POSTGRES_DB: commerce_db
+    POSTGRES_USER: commerce_user
+    POSTGRES_PASSWORD: commerce_password
+
+    DB_URL: jdbc:postgresql://postgres:5432/commerce_db
+    DB_USERNAME: commerce_user
+    DB_PASSWORD: commerce_password
 
   script:
     - java -version
