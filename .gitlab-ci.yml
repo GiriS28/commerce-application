@@ -2,9 +2,6 @@ stages:
   - test
   - docker-test
 
-# -----------------------------------
-# 1. Build and test User Service
-# -----------------------------------
 build-user-service:
   stage: test
 
@@ -33,10 +30,7 @@ build-user-service:
     - mvn clean package
 
 
-# -----------------------------------
-# 2. Test Docker access
-# -----------------------------------
-docker-test:
+docker-build:
   stage: docker-test
 
   tags:
@@ -47,3 +41,4 @@ docker-test:
   script:
     - docker version
     - docker info
+    - docker build -t commerce-user-service:$CI_COMMIT_SHORT_SHA ./user-service
