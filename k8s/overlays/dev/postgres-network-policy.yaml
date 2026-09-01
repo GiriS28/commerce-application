@@ -18,6 +18,10 @@ spec:
             matchLabels:
               app: user-service
 
+        - podSelector:
+            matchLabels:
+              app: product-service
+
       ports:
         - protocol: TCP
           port: 5432

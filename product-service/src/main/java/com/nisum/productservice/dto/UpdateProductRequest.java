@@ -1,8 +1,6 @@
 package com.nisum.productservice.dto;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 
@@ -19,6 +17,10 @@ public record UpdateProductRequest(
 
         @NotBlank(message = "Category is required")
         @Size(max = 50, message = "Category must not exceed 50 characters")
-        String category
+        String category,
+
+        @NotNull
+        @PositiveOrZero
+        Long version
 ) {
 }

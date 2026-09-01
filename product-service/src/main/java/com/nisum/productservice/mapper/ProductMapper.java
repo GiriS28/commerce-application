@@ -44,7 +44,8 @@ public class ProductMapper {
                 product.getCategory(),
                 product.getStatus(),
                 product.getCreatedAt(),
-                product.getUpdatedAt()
+                product.getUpdatedAt(),
+                product.getVersion()
         );
     }
 }

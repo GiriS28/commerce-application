@@ -1,15 +1,16 @@
 package com.nisum.productservice.controller;
 
-import com.nisum.productservice.dto.CreateProductRequest;
-import com.nisum.productservice.dto.ProductResponse;
-import com.nisum.productservice.dto.UpdateProductRequest;
+import com.nisum.productservice.dto.*;
+import com.nisum.productservice.entity.ProductStatus;
 import com.nisum.productservice.service.ProductService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -42,11 +43,31 @@ public class ProductController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ProductResponse>> getAllProducts() {
+    public ResponseEntity<PageResponse<ProductResponse>> getAllProducts(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) ProductStatus status,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            Pageable pageable) {
 
-        return ResponseEntity.ok(
-                productService.getAllProducts()
-        );
+        ProductFilterRequest filter = new ProductFilterRequest(name, category, status, minPrice, maxPrice);
+
+        Page<ProductResponse> productPage =
+                productService.getAllProducts(filter, pageable);
+
+        PageResponse<ProductResponse> response =
+                new PageResponse<>(
+                        productPage.getContent(),
+                        productPage.getNumber(),
+                        productPage.getSize(),
+                        productPage.getTotalElements(),
+                        productPage.getTotalPages(),
+                        productPage.isFirst(),
+                        productPage.isLast()
+                );
+
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")

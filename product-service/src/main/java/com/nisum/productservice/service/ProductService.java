@@ -1,10 +1,11 @@
 package com.nisum.productservice.service;
 
 import com.nisum.productservice.dto.CreateProductRequest;
+import com.nisum.productservice.dto.ProductFilterRequest;
 import com.nisum.productservice.dto.ProductResponse;
 import com.nisum.productservice.dto.UpdateProductRequest;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ProductService {
 
@@ -12,7 +13,7 @@ public interface ProductService {
 
     ProductResponse getProduct(Long id);
 
-    List<ProductResponse> getAllProducts();
+    Page<ProductResponse> getAllProducts(ProductFilterRequest filterRequest, Pageable pageable);
 
     ProductResponse updateProduct(
             Long id,

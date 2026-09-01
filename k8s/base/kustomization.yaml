@@ -5,6 +5,11 @@ resources:
   - postgres-deployment.yaml
   - postgres-service.yaml
   - postgres-pvc.yaml
+
   - user-service-deployment.yaml
   - user-service-service.yaml
   - user-service-ingress.yaml
+
+  - product-service-deployment.yaml
+  - product-service-service.yaml
+  - product-service-configmap.yaml

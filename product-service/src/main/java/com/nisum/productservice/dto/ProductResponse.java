@@ -15,6 +15,7 @@ public record ProductResponse(
         String category,
         ProductStatus status,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        Long version
 ) {
 }

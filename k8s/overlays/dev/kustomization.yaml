@@ -7,6 +7,7 @@ resources:
   - ../../base
   - user-service-hpa.yaml
   - postgres-network-policy.yaml
+  - product-service-hpa.yaml
 
 configMapGenerator:
   - name: user-service-config
