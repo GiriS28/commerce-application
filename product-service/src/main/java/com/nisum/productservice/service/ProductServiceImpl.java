@@ -7,6 +7,7 @@ import com.nisum.productservice.dto.ProductResponse;
 import com.nisum.productservice.dto.UpdateProductRequest;
 import com.nisum.productservice.entity.Product;
 import com.nisum.productservice.entity.ProductStatus;
+import com.nisum.productservice.event.ProductUpdatedTransactionEvent;
 import com.nisum.productservice.exception.DuplicateSkuException;
 import com.nisum.productservice.exception.ProductNotFoundException;
 import com.nisum.productservice.mapper.ProductMapper;
@@ -18,6 +19,7 @@ import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -48,18 +50,19 @@ public class ProductServiceImpl implements ProductService {
     private final ProductSortValidator productSortValidator;
     private final ProductFilterValidator productFilterValidator;
     private final ProductSpecificationBuilder productSpecificationBuilder;
-
+    private final ApplicationEventPublisher eventPublisher;
     private static final Logger log =
             LoggerFactory.getLogger(ProductServiceImpl.class);
 
     public ProductServiceImpl(RedisTemplate<String, ProductCacheEntry> productRedisTemplate, ProductRepository productRepository,
-                              ProductMapper productMapper, ProductSortValidator productSortValidator, ProductFilterValidator productFilterValidator, ProductSpecificationBuilder productSpecificationBuilder) {
+                              ProductMapper productMapper, ProductSortValidator productSortValidator, ProductFilterValidator productFilterValidator, ProductSpecificationBuilder productSpecificationBuilder, ApplicationEventPublisher eventPublisher) {
         this.productRedisTemplate = productRedisTemplate;
         this.productRepository = productRepository;
         this.productMapper = productMapper;
         this.productSortValidator = productSortValidator;
         this.productFilterValidator = productFilterValidator;
         this.productSpecificationBuilder = productSpecificationBuilder;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -341,9 +344,13 @@ public class ProductServiceImpl implements ProductService {
 
         Product updatedProduct = productRepository.saveAndFlush(product);
 
-        String cacheKey = PRODUCT_CACHE_PREFIX + id;
+        eventPublisher.publishEvent(
+                new ProductUpdatedTransactionEvent(id)
+        );
 
-        evictProductCacheWithRetry(id, cacheKey);
+//        String cacheKey = PRODUCT_CACHE_PREFIX + id;
+//
+//        evictProductCacheWithRetry(id, cacheKey);
 
         return productMapper.toResponse(updatedProduct);
     }
