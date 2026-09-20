@@ -4,6 +4,7 @@ import com.nisum.productservice.dto.*;
 import com.nisum.productservice.entity.ProductStatus;
 import com.nisum.productservice.service.ProductService;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -49,7 +50,7 @@ public class ProductController {
             @RequestParam(required = false) ProductStatus status,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
 
         ProductFilterRequest filter = new ProductFilterRequest(name, category, status, minPrice, maxPrice);
 

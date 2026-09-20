@@ -1,5 +1,7 @@
 package com.nisum.productservice.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nisum.productservice.cache.ProductCacheEntry;
 import com.nisum.productservice.dto.CreateProductRequest;
 import com.nisum.productservice.dto.ProductFilterRequest;
@@ -7,10 +9,13 @@ import com.nisum.productservice.dto.ProductResponse;
 import com.nisum.productservice.dto.UpdateProductRequest;
 import com.nisum.productservice.entity.Product;
 import com.nisum.productservice.entity.ProductStatus;
+import com.nisum.productservice.event.ProductUpdatedEvent;
 import com.nisum.productservice.event.ProductUpdatedTransactionEvent;
 import com.nisum.productservice.exception.DuplicateSkuException;
 import com.nisum.productservice.exception.ProductNotFoundException;
 import com.nisum.productservice.mapper.ProductMapper;
+import com.nisum.productservice.outbox.OutboxEvent;
+import com.nisum.productservice.outbox.OutboxEventRepository;
 import com.nisum.productservice.repository.ProductRepository;
 import com.nisum.productservice.specification.ProductSpecificationBuilder;
 import com.nisum.productservice.validation.ProductFilterValidator;
@@ -28,12 +33,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Transactional
 public class ProductServiceImpl implements ProductService {
     private final RedisTemplate<String, ProductCacheEntry> productRedisTemplate;
+
+    private final OutboxEventRepository outboxEventRepository;
 
     @Value("${product.cache.ttl}")
     private Duration productCacheTtl;
@@ -51,18 +60,21 @@ public class ProductServiceImpl implements ProductService {
     private final ProductFilterValidator productFilterValidator;
     private final ProductSpecificationBuilder productSpecificationBuilder;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
     private static final Logger log =
             LoggerFactory.getLogger(ProductServiceImpl.class);
 
-    public ProductServiceImpl(RedisTemplate<String, ProductCacheEntry> productRedisTemplate, ProductRepository productRepository,
-                              ProductMapper productMapper, ProductSortValidator productSortValidator, ProductFilterValidator productFilterValidator, ProductSpecificationBuilder productSpecificationBuilder, ApplicationEventPublisher eventPublisher) {
+    public ProductServiceImpl(RedisTemplate<String, ProductCacheEntry> productRedisTemplate, OutboxEventRepository outboxEventRepository, ProductRepository productRepository,
+                              ProductMapper productMapper, ProductSortValidator productSortValidator, ProductFilterValidator productFilterValidator, ProductSpecificationBuilder productSpecificationBuilder, ApplicationEventPublisher eventPublisher, ObjectMapper objectMapper) {
         this.productRedisTemplate = productRedisTemplate;
+        this.outboxEventRepository = outboxEventRepository;
         this.productRepository = productRepository;
         this.productMapper = productMapper;
         this.productSortValidator = productSortValidator;
         this.productFilterValidator = productFilterValidator;
         this.productSpecificationBuilder = productSpecificationBuilder;
         this.eventPublisher = eventPublisher;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -351,6 +363,29 @@ public class ProductServiceImpl implements ProductService {
 //        String cacheKey = PRODUCT_CACHE_PREFIX + id;
 //
 //        evictProductCacheWithRetry(id, cacheKey);
+        try {
+            String payload = objectMapper.writeValueAsString(
+                    new ProductUpdatedEvent(product.getId())
+            );
+
+            OutboxEvent outboxEvent = new OutboxEvent(
+                    UUID.randomUUID().toString(),
+                    "PRODUCT",
+                    product.getId().toString(),
+                    "PRODUCT_UPDATED",
+                    payload,
+                    "PENDING",
+                    0,
+                    LocalDateTime.now()
+            );
+
+            outboxEventRepository.save(outboxEvent);
+
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(
+                    "Failed to create product outbox event", e
+            );
+        }
 
         return productMapper.toResponse(updatedProduct);
     }
