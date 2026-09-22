@@ -1,8 +1,6 @@
 package com.nisum.cartservice.repository;
 
-import com.nisum.cartservice.config.ResilienceConfig;
 import com.nisum.cartservice.entity.Cart;
-import com.nisum.cartservice.exception.CartStorageException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -25,9 +23,11 @@ public class CartRepository {
         this.redisTemplate = redisTemplate;
     }
 
-    public void save(Cart cart) {
+    public boolean save(Cart cart) {
+
+        String key = buildKey(cart.getUserId());
+
         try {
-            String key = buildKey(cart.getUserId());
 
             redisTemplate.opsForValue().set(
                     key,
@@ -35,63 +35,119 @@ public class CartRepository {
                     CART_TTL_MINUTES,
                     TimeUnit.MINUTES
             );
-            Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+
+            Long ttl =
+                    redisTemplate.getExpire(key, TimeUnit.SECONDS);
 
             log.info(
-                    "Redis SAVE: key={}, TTL={} seconds",
+                    "Redis SAVE successful: key={}, userId={}, TTL={} seconds",
                     key,
+                    cart.getUserId(),
                     ttl
             );
-        } catch (Exception e) {
-            throw new CartStorageException("Unable to access cart storage", e);
+            return true;
+
+        } catch (Exception exception) {
+
+            log.error(
+                    "Redis SAVE failed: key={}, userId={}. " +
+                            "Cart remains persisted in MySQL",
+                    key,
+                    cart.getUserId(),
+                    exception
+            );
+
+            // Redis is only a cache.
+            // Do not fail the request when cache update fails.
         }
+        return false;
     }
 
     public Cart findByUserId(Long userId) {
+
+        String key = buildKey(userId);
+
         try {
-            String key = buildKey(userId);
 
-            Cart cart = redisTemplate.opsForValue().get(key);
+            Cart cart =
+                    redisTemplate.opsForValue().get(key);
 
-            Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+            Long ttl =
+                    redisTemplate.getExpire(key, TimeUnit.SECONDS);
 
-            log.info(
-                    "Redis GET: key={}, found={}, TTL={} seconds",
-                    key,
-                    cart != null,
-                    ttl
-            );
+            if (cart != null) {
+
+                log.info(
+                        "Redis cache HIT: key={}, userId={}, TTL={} seconds",
+                        key,
+                        userId,
+                        ttl
+                );
+
+            } else {
+
+                log.info(
+                        "Redis cache MISS: key={}, userId={}",
+                        key,
+                        userId
+                );
+            }
 
             return cart;
 
         } catch (Exception exception) {
-            throw new CartStorageException(
-                    "Unable to access cart storage",
+
+            log.error(
+                    "Redis GET failed: key={}, userId={}. " +
+                            "Falling back to MySQL",
+                    key,
+                    userId,
                     exception
             );
+
+            /*
+             * Returning null intentionally.
+             *
+             * CartService interprets null as a Redis MISS
+             * and then checks MySQL.
+             */
+            return null;
         }
     }
 
-    public void deleteByUserId(Long userId) {
-        try {
-            String key = buildKey(userId);
+    public boolean deleteByUserId(Long userId) {
 
-            Boolean deleted = redisTemplate.delete(key);
+        String key = buildKey(userId);
+
+        try {
+
+            Boolean deleted =
+                    redisTemplate.delete(key);
 
             log.info(
-                    "Redis DELETE: key={}, deleted={}",
+                    "Redis DELETE successful: key={}, userId={}, deleted={}",
                     key,
+                    userId,
                     deleted
             );
 
-        } catch (Exception e) {
-            throw new CartStorageException("Unable to access cart storage", e);
+            return Boolean.TRUE.equals(deleted);
+
+        } catch (Exception exception) {
+
+            log.error(
+                    "Redis DELETE failed: key={}, userId={}. " +
+                            "MySQL remains the source of truth",
+                    key,
+                    userId,
+                    exception
+            );
+
+            return false;
         }
     }
 
     private String buildKey(Long userId) {
         return CART_KEY_PREFIX + userId;
     }
-
-
 }
