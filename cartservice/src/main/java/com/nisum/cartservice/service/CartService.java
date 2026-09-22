@@ -8,12 +8,15 @@ import com.nisum.cartservice.entity.CartItem;
 import com.nisum.cartservice.exception.CartItemNotFoundException;
 import com.nisum.cartservice.exception.CartNotFoundException;
 import com.nisum.cartservice.exception.ProductNotAvailableException;
+import com.nisum.cartservice.mapper.CartMapper;
+import com.nisum.cartservice.persistence.entity.CartEntity;
+import com.nisum.cartservice.persistence.entity.CartItemEntity;
+import com.nisum.cartservice.persistence.repository.CartJpaRepository;
 import com.nisum.cartservice.repository.CartRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.UUID;
 
 @Service
 public class CartService {
@@ -22,20 +25,48 @@ public class CartService {
 
     private final CartRepository cartRepository;
 
-    public CartService(ProductServiceClient productServiceClient, CartRepository cartRepository) {
+    private final CartJpaRepository cartJpaRepository;
+
+    private final CartMapper cartMapper;
+
+    public CartService(
+            ProductServiceClient productServiceClient,
+            CartRepository cartRepository,
+            CartJpaRepository cartJpaRepository,
+            CartMapper cartMapper) {
         this.productServiceClient = productServiceClient;
         this.cartRepository = cartRepository;
+        this.cartJpaRepository = cartJpaRepository;
+        this.cartMapper = cartMapper;
     }
 
     public Cart getCart(Long userId) {
 
-
+        // 1. Check Redis first
         Cart cart = cartRepository.findByUserId(userId);
 
         if (cart != null) {
             return cart;
         }
 
+        // 2. Redis MISS → check MySQL
+        CartEntity cartEntity =
+                cartJpaRepository.findByUserId(userId)
+                        .orElse(null);
+
+        if (cartEntity != null) {
+
+            // 3. MySQL HIT → convert Entity to Domain
+            Cart dbCart =
+                    cartMapper.toDomain(cartEntity);
+
+            // 4. Rebuild Redis cache
+            cartRepository.save(dbCart);
+
+            return dbCart;
+        }
+
+        // 5. Cart doesn't exist anywhere → create it
         return createCart(userId);
     }
 
@@ -45,20 +76,33 @@ public class CartService {
 
         Cart cart = new Cart();
 
-        cart.setCartId("CART-" + UUID.randomUUID());
+        cart.setCartId("CART-" + userId);
         cart.setUserId(userId);
         cart.setItems(new ArrayList<>());
         cart.setCreatedAt(now);
         cart.setUpdatedAt(now);
         cart.setExpiresAt(now.plusMinutes(30));
 
-        cartRepository.save(cart);
+        // 1. Persist in MySQL
+        CartEntity cartEntity =
+                cartMapper.toNewEntity(cart);
 
-        return cart;
+        CartEntity savedEntity =
+                cartJpaRepository.save(cartEntity);
+
+        // 2. Convert persisted entity back to domain
+        Cart savedCart =
+                cartMapper.toDomain(savedEntity);
+
+        // 3. Cache in Redis
+        cartRepository.save(savedCart);
+
+        return savedCart;
     }
 
     public Cart addItem(Long userId, AddCartItemRequest request) {
 
+        // 1. Validate product with Product Service
         ProductResponse product =
                 productServiceClient.getProduct(request.productId());
 
@@ -66,19 +110,21 @@ public class CartService {
             throw new ProductNotAvailableException(request.productId());
         }
 
+        // 2. Get cart
         Cart cart = getCart(userId);
 
-        CartItem existingItem = cart.getItems()
+        // 3. Check whether product already exists
+        CartItem dbItem = cart.getItems()
                 .stream()
                 .filter(item ->
                         item.getProductId().equals(product.id()))
                 .findFirst()
                 .orElse(null);
 
-        if (existingItem != null) {
+        if (dbItem != null) {
 
-            existingItem.setQuantity(
-                    existingItem.getQuantity() + request.quantity()
+            dbItem.setQuantity(
+                    dbItem.getQuantity() + request.quantity()
             );
 
         } else {
@@ -93,13 +139,58 @@ public class CartService {
             cart.getItems().add(newItem);
         }
 
-        cart.setUpdatedAt(LocalDateTime.now());
-        cart.setExpiresAt(LocalDateTime.now().plusMinutes(30));
-
+        // 4. Refresh cart timestamps
         refreshCartExpiration(cart);
-        cartRepository.save(cart);
 
-        return cart;
+        // 5. Find existing persistent cart
+        CartEntity cartEntity =
+                cartJpaRepository.findByUserId(userId)
+                        .orElseThrow(() ->
+                                new CartNotFoundException(userId));
+
+        // 6. Update existing CartEntity
+        cartMapper.updateEntity(cart, cartEntity);
+
+        // 7. Synchronize items
+        // cartEntity.getItems().clear();
+
+        for (CartItem item : cart.getItems()) {
+
+            CartItemEntity existingItem =
+                    cartEntity.getItems()
+                            .stream()
+                            .filter(entity ->
+                                    entity.getProductId().equals(item.getProductId()))
+                            .findFirst()
+                            .orElse(null);
+
+            if (existingItem != null) {
+
+                existingItem.setProductName(item.getProductName());
+                existingItem.setQuantity(item.getQuantity());
+                existingItem.setPriceSnapshot(item.getPriceSnapshot());
+
+            } else {
+
+                CartItemEntity newItem =
+                        cartMapper.toNewEntity(item);
+
+                cartEntity.addItem(newItem);
+            }
+        }
+
+        // 8. Save MySQL
+        CartEntity savedEntity =
+                cartJpaRepository.save(cartEntity);
+
+        // 9. Convert back to domain
+        Cart savedCart =
+                cartMapper.toDomain(savedEntity);
+
+        // 10. Update Redis
+        cartRepository.save(savedCart);
+
+        return savedCart;
     }
 
     public Cart updateItemQuantity(

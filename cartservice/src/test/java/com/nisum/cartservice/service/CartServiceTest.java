@@ -6,6 +6,8 @@ import com.nisum.cartservice.dto.response.ProductResponse;
 import com.nisum.cartservice.entity.Cart;
 import com.nisum.cartservice.entity.CartItem;
 import com.nisum.cartservice.exception.ProductNotAvailableException;
+import com.nisum.cartservice.mapper.CartMapper;
+import com.nisum.cartservice.persistence.repository.CartJpaRepository;
 import com.nisum.cartservice.repository.CartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,8 @@ class CartServiceTest {
     private CartRepository cartRepository;
     private ProductServiceClient productServiceClient;
     private CartService cartService;
+    private CartJpaRepository cartJpaRepository;
+    private CartMapper cartMapper;
 
     @BeforeEach
     void setUp() {
@@ -31,7 +35,9 @@ class CartServiceTest {
 
         cartService = new CartService(
                 productServiceClient,
-                cartRepository
+                cartRepository,
+                cartJpaRepository,
+                cartMapper
         );
     }
 
